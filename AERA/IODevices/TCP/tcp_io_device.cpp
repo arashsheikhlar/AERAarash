@@ -324,8 +324,11 @@ namespace tcp_io_device {
     }
     case VariableDescription_DataType_STRING:
     {
-      // TODO: Using the .asIndex() function this can be done
+      // TODO: Using the .asIndex() function this can be done (See the Utils::GetString())
       cout << "> WARNING: String type not implemented, yet" << endl;
+      break;
+      // std::string data = cmd->code(args_set_index + 2).String(0);
+      // var->set_data(data);
     }
     }
     return msg;
@@ -352,6 +355,7 @@ namespace tcp_io_device {
         return;
       }
     }
+    std::cout << "Received message of type " << msg->messagetype();
 
     handleMessage(std::move(msg));
     lastInjectTime_ = now;
@@ -404,6 +408,7 @@ namespace tcp_io_device {
   template<class O, class S>
   void TcpIoDevice<O, S>::sendMessage(std::unique_ptr<TCPMessage> msg) {
     // Simply enqueue the message to send and let the TCPConnection do the actual sending.
+    std::cout << "Sending Message of type " << msg->messagetype() << std::endl;
     send_queue_->enqueue(std::move(msg));
   }
 
@@ -436,7 +441,17 @@ namespace tcp_io_device {
 
       auto entity = entities_[id_mapping_[var.getMetaData().getEntityID()]];
       auto obj = objects_[id_mapping_[var.getMetaData().getID()]];
+      std::cout << std::endl << "Entity: " << entity->trace_string() << std::endl;
+      std::cout << std::endl << "Object: " << obj->trace_string() << std::endl;
+        
       Atom val = Atom::Float(var.getData<double>()[0]);
+
+      std::cout << "Received Atom string: " << std::endl;
+      Atom::TraceContext context;
+      val.trace(context, std::cout);
+      std::cout << endl;
+      std::cout << "received value: " << var.getData<double>()[0] << std::endl;
+      std::cout << "Current time: " << Utils::RelativeTime(Now()) << std::endl;
       if (id_mapping_[var.getMetaData().getID()] == "velocity_y") {
         inject_marker_value_from_io_device(entity, obj, val, now, now + get_sampling_period(), r_exec::View::SYNC_HOLD, get_stdin());
       }
@@ -451,19 +466,26 @@ namespace tcp_io_device {
   {
     auto setup_message = setup_msg->release_setupmessage();
     // Initialize all entities and store their communication ids in the id_mapping_ map.
+    cout << "Setup message received." << endl;
+    cout << "Parsing entities with communication ids:" << endl;
     for (auto it = setup_message->entities().begin(); it != setup_message->entities().end(); ++it) {
       id_mapping_[it->second] = it->first;
       entities_[it->first] = NULL;
+      cout << it->first << " : " << it->second << endl;
     }
     // Initialize all commands and store their communication ids in the id_mapping_ map.
+    cout << "Parsing commands with communication ids:" << endl;
     for (auto it = setup_message->commands().begin(); it != setup_message->commands().end(); ++it) {
       id_mapping_[it->second] = it->first;
       commands_[it->first] = 0xFFFF;
+      cout << it->first << " : " << it->second << endl;
     }
     // Initialize all properties and store their communication ids in the id_mapping_ map.
+    cout << "Parsing objects with communication ids:" << endl;
     for (auto it = setup_message->objects().begin(); it != setup_message->objects().end(); ++it) {
       id_mapping_[it->second] = it->first;
       objects_[it->first] = NULL;
+      cout << it->first << " : " << it->second << endl;
     }
     // Add the ready-command, if not received from the environment simulation.
     if (commands_.find("ready") == commands_.end()) {

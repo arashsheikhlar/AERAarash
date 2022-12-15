@@ -97,7 +97,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <AdditionalIncludeDirectories>..\r_code;..\CoreLibrary;..\r_exec;..\r_comp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;ENABLE_PROTOBUF;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling />
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -193,7 +193,12 @@
     <None Include="Demo1\test.1.replicode" />
     <None Include="Demo1\user.classes.replicode" />
     <None Include="IODevices\TCP\Proto\ReadMe.md" />
-    <None Include="IODevices\TCP\Proto\tcp_data_message.proto" />
+    <None Include="IODevices\TCP\Proto\tcp_data_message.proto">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)Dependencies\include\protobuf\bin\protoc.exe --proto_path= .\proto %(Filename).proto --cpp_out=$(ProjectDir)protocpp</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">protoc %(Filename).proto</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)protocpp%(Filename).pb.cc</Outputs>
+    </None>
     <None Include="replicode_v1.1\helgi.replicode" />
     <None Include="replicode_v1.1\rgrp.user.classes.replicode" />
     <None Include="replicode_v1.1\std.replicode" />
