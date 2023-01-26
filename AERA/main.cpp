@@ -3,9 +3,9 @@
 //_/_/ AERA
 //_/_/ Autocatalytic Endogenous Reflective Architecture
 //_/_/ 
-//_/_/ Copyright (c) 2018-2022 Jeff Thompson
-//_/_/ Copyright (c) 2018-2022 Kristinn R. Thorisson
-//_/_/ Copyright (c) 2018-2022 Icelandic Institute for Intelligent Machines
+//_/_/ Copyright (c) 2018-2023 Jeff Thompson
+//_/_/ Copyright (c) 2018-2023 Kristinn R. Thorisson
+//_/_/ Copyright (c) 2018-2023 Icelandic Institute for Intelligent Machines
 //_/_/ http://www.iiim.is
 //_/_/ 
 //_/_/ Copyright (c) 2010-2012 Eric Nivel
@@ -217,8 +217,8 @@ void decompile(Decompiler &decompiler, r_comp::Image *image, Timestamp time_refe
       continue;
     }
     std::ostringstream decompiled_code;
-    decompiler.decompile_object(index, &decompiled_code, time_offset);
-    std::cout << "\n\n> DECOMPILATION. TimeReference " << Time::ToString_seconds(time_reference) << "\n\n" <<
+    decompiler.decompile_object(index, &decompiled_code, time_reference);
+    std::cout << "\n\n> DECOMPILATION. TimeReference " << Utils::ToString_s_ms_us(time_reference, Timestamp(seconds(0))) << "\n\n" <<
       decompiled_code.str() << std::endl;
   }
 #else
