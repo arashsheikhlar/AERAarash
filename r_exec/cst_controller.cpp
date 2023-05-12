@@ -85,6 +85,11 @@
 #include "cst_controller.h"
 #include "mem.h"
 #include "hlp_context.h"
+#include "pattern_extractor.h"
+#include "auto_focus.h"
+#include "reduction_job.h"
+#include "model_base.h"
+#include "mdl_controller.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -627,17 +632,41 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
   uint16 obj_set_index = cst->code(CST_OBJS).asIndex();
   uint16 obj_count = cst->code(obj_set_index).getAtomCount();
   Group *host = get_host();
+
+  vector<_TPX::Component> components;
+  P<Code> new_cst;
+  vector<View*> views_mdl;
+  vector<View*> views_cst;
+  std::vector<P<r_code::Code> > mdls_; // new mdls
+  std::vector<P<r_code::Code> > csts_;
+  bool analogy;
+
   for (uint16 i = 1; i <= obj_count; ++i) {
 
     _Fact *pattern = (_Fact *)cst->get_reference(cst->code(obj_set_index + i).asIndex());
     _Fact *bound_pattern = (_Fact *)bm->bind_pattern(pattern);
-    if (_Mem::Get()->matches_axiom(bound_pattern->get_reference(0)))
-      // Don't make a goal of a member which is an axiom.
-      continue;
 
     _Fact *evidence;
     if (opposite)
       bound_pattern->set_opposite();
+
+    //// add the matched components to a new composite state ///////////
+    if (check_evidences(bound_pattern, evidence) == MATCH_SUCCESS_POSITIVE
+      || _Mem::Get()->matches_axiom(bound_pattern->get_reference(0)))
+    {
+      // Inject each subgoal to the host if it matches the evidence (according to inect_goal function). Then push it to the components vector. 
+      Goal* sub_goal = new Goal(bound_pattern, f_super_goal->get_goal()->get_actor(), sim, 1);
+      _Fact* sub_goal_f = new Fact(sub_goal, now, now, 1, 1);
+      View* view = new View(View::SYNC_ONCE, now, confidence, 1, host, host, sub_goal_f); // SYNC_ONCE,res=1.
+      _Mem::Get()->inject(view);
+      components.push_back(_TPX::Component(bound_pattern));
+    }
+
+
+    if (_Mem::Get()->matches_axiom(bound_pattern->get_reference(0)))
+      // Don't make a goal of a member which is an axiom.
+      continue;
+
     switch (check_evidences(bound_pattern, evidence)) {
     case MATCH_SUCCESS_POSITIVE: // positive evidence, no need to produce a sub-goal: skip.
       break;
@@ -650,9 +679,69 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
       case MATCH_SUCCESS_NEGATIVE:
       case MATCH_FAILURE: // inject a sub-goal for the missing predicted positive evidence.
         inject_goal(bm, f_super_goal, bound_pattern, sub_sim, now, confidence, host); // all sub-goals share the same sim.
+        analogy = true;
         break;
       }
     }
+  }
+  if (analogy == true) {
+
+    _Fact* component = components[0].object;
+    new_cst = _TPX::build_cst_sim(components, bm, component, host);
+    _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
+    _Mem::Get()->pack_hlp(new_cst);
+    View* view_cst = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, new_cst, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
+    views_cst.push_back(view_cst);
+    _Mem::Get()->inject_hlps(views_cst, host);
+
+    _Fact* f_icst = bm->build_f_ihlp(new_cst, Opcodes::ICst, false);
+    View* view_f_icst = new View(View::SYNC_ONCE, now, 1, 1, host, host, f_icst, 1);
+    _Mem::Get()->inject(view_f_icst);
+
+    //Retrive the causal model that is needed for building a REQ model, and inject it to priamary group
+    Code* crm = (((sim->get_reference(0))->get_reference(0))->get_reference(2))->get_reference(2);
+    View* view_crm = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, crm, 1);
+    //views_mdl.push_back(view_crm);
+    _Mem::Get()->inject(view_crm);
+    mdls_.push_back(crm);
+
+    // Build and inject instantiated causal model to priamary group
+    P<Fact> f_icrm = bm->build_f_ihlp(crm, Opcodes::IMdl, false);
+    View* view_f_icrm = new View(View::SYNC_ONCE, now, 1, 1, host, host, f_icrm, 1);
+    _Mem::Get()->inject(view_f_icrm);
+
+    // Build model head, guards, and model tail for a requirement model
+    uint16 write_index;
+    P<Code> req = _TPX::build_mdl_head(bm, 0, f_icst, f_icrm, write_index);
+    P<GuardBuilder> guard_builder = new GuardBuilder();
+    guard_builder->build(req, NULL, NULL, write_index);
+    _TPX::build_mdl_tail_sim(req, write_index, host);
+
+    // pack requirement model
+    _Mem::Get()->pack_hlp(req);
+    mdls_.push_back(req);
+    //Fact* m1_star = new Fact(m1, now, now, 1, 1);
+
+     // create the first view of the requirement model and inject it 
+     //View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
+    View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req);
+    _Mem::Get()->inject(view_req);
+
+    // create the second view of the requirement model and inject it 
+    //View* view2_req = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, req, 1);
+    View* view2_req = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, req);
+    _Mem::Get()->inject(view2_req);
+
+    // Inject_hlps: Tested and did not work
+    // 
+    //vector<P<Code> >::const_iterator hlp;
+    //for (hlp = mdls_.begin(); hlp != mdls_.end(); ++hlp) {
+
+    //  View* view = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, *hlp, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
+    //  view->references_[0] = host;
+    //  views_mdl.push_back(view);
+    //}
+    //_Mem::Get()->inject_hlps(views_mdl, host);
   }
 }
 
