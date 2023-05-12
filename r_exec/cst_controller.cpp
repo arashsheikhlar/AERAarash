@@ -684,7 +684,7 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
       }
     }
   }
-  if (analogy) {
+  if (analogy == true) {
 
     _Fact* component = components[0].object;
     new_cst = _TPX::build_cst_sim(components, bm, component, host);
@@ -695,19 +695,20 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
     _Mem::Get()->inject_hlps(views_cst, host);
 
     _Fact* f_icst = bm->build_f_ihlp(new_cst, Opcodes::ICst, false);
-
+    View* view_f_icst = new View(View::SYNC_ONCE, now, 1, 1, host, host, f_icst, 1);
+    _Mem::Get()->inject(view_f_icst);
 
     //Retrive the causal model that is needed for building a REQ model, and inject it to priamary group
     Code* crm = (((sim->get_reference(0))->get_reference(0))->get_reference(2))->get_reference(2);
-    //// create the first view of the causal model and inject it 
-    View* view_crm = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, crm, 1); // activation 1
+    View* view_crm = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, crm, 1);
+    //views_mdl.push_back(view_crm);
     _Mem::Get()->inject(view_crm);
-    ////// create the second view of the causal model and inject it 
-    View* view2_crm = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, crm, 0); //activation 0
-    _Mem::Get()->inject(view2_crm);
+    mdls_.push_back(crm);
 
     // Build and inject instantiated causal model to priamary group
     P<Fact> f_icrm = bm->build_f_ihlp(crm, Opcodes::IMdl, false);
+    View* view_f_icrm = new View(View::SYNC_ONCE, now, 1, 1, host, host, f_icrm, 1);
+    _Mem::Get()->inject(view_f_icrm);
 
     // Build model head, guards, and model tail for a requirement model
     uint16 write_index;
@@ -722,12 +723,25 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
     //Fact* m1_star = new Fact(m1, now, now, 1, 1);
 
      // create the first view of the requirement model and inject it 
-    View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
+     //View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
+    View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req);
     _Mem::Get()->inject(view_req);
 
     // create the second view of the requirement model and inject it 
-    View* view2_req = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, req, 0);
+    //View* view2_req = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, req, 1);
+    View* view2_req = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, req);
     _Mem::Get()->inject(view2_req);
+
+    // Inject_hlps: Tested and did not work
+    // 
+    //vector<P<Code> >::const_iterator hlp;
+    //for (hlp = mdls_.begin(); hlp != mdls_.end(); ++hlp) {
+
+    //  View* view = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, *hlp, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
+    //  view->references_[0] = host;
+    //  views_mdl.push_back(view);
+    //}
+    //_Mem::Get()->inject_hlps(views_mdl, host);
   }
 }
 
