@@ -176,7 +176,7 @@ class r_exec_dll _TPX :
   public TPX {
 private:
   static const uint32 InputsInitialSize = 16;
-public:
+protected:
   class Component { // for building csts.
   public:
     _Fact *object;
@@ -204,7 +204,6 @@ public:
   std::vector<P<r_code::Code> > mdls_; // new mdls.
   std::vector<P<r_code::Code> > csts_; // new csts.
   std::vector<P<_Fact> > f_icsts_; // facts of new icsts.
-  std::vector<_TPX::Component> components_;
 
   void filter_icst_components(ICST *icst, uint32 icst_index, std::vector<Component> &components);
 
@@ -253,11 +252,9 @@ public:
 
   _Fact *make_f_icst(_Fact *component, _Fact*& component_pattern, P<r_code::Code> &new_cst);
   r_code::Code *build_cst(const std::vector<Component> &components, BindingMap *bm, _Fact *main_component);
-  static r_code::Code* build_cst_sim(const std::vector<Component>& components, BindingMap* bm, _Fact* main_component, Group* host);
 
-  static r_code::Code *build_mdl_head(HLPBindingMap *bm, uint16 tpl_arg_count, _Fact *lhs, _Fact *rhs, uint16 &write_index, bool allow_shared_timing_vars = true);
+  r_code::Code *build_mdl_head(HLPBindingMap *bm, uint16 tpl_arg_count, _Fact *lhs, _Fact *rhs, uint16 &write_index, bool allow_shared_timing_vars = true);
   void build_mdl_tail(r_code::Code *mdl, uint16 write_index);
-  static void build_mdl_tail_sim(r_code::Code* mdl, uint16 write_index, Group* host);
 
   void inject_hlps() const;
   void inject_hlps(Timestamp analysis_starting_time);
