@@ -685,8 +685,8 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
   if(analogy) {
 
     _Fact* component = components[0].object;
-    new_cst = _TPX::build_cst_sim(components, bm, component, host);
-    _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
+    new_cst = _TPX::build_cst_sim(components, bm, component, (Group*)get_out_group(0));
+   // _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
     _Mem::Get()->pack_hlp(new_cst);
     View* view_cst = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, new_cst, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
     views_cst.push_back(view_cst);
@@ -694,16 +694,10 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
 
     _Fact* f_icst = bm->build_f_ihlp(new_cst, Opcodes::ICst, false);
 
-    //Retrive the causal model that is needed for building a REQ model, and inject it to priamary group
+    //Retrive the causal model that is needed for building a REQ model.
     Code* crm = (((sim->get_reference(0))->get_reference(0))->get_reference(2))->get_reference(2);
-    //// create the first view of the causal model and inject it 
-    View* view_crm = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, crm, 1); // activation 1
-    _Mem::Get()->inject(view_crm);
-    ////// create the second view of the causal model and inject it 
-    View* view2_crm = new View(View::SYNC_ONCE, now, 0, -1, secondary_host_, NULL, crm, 0); //activation 0
-    _Mem::Get()->inject(view2_crm);
 
-    // Build and inject instantiated causal model to priamary group
+    // Build instantiated causal model
     P<Fact> f_icrm = bm->build_f_ihlp(crm, Opcodes::IMdl, false);
 
     // Build model head, guards, and model tail for a requirement model
@@ -711,12 +705,11 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
     P<Code> req = _TPX::build_mdl_head(bm, 0, f_icst, f_icrm, write_index);
     P<GuardBuilder> guard_builder = new GuardBuilder();
     guard_builder->build(req, NULL, NULL, write_index);
-    _TPX::build_mdl_tail_sim(req, write_index, host);
+    _TPX::build_mdl_tail_sim(req, write_index, (Group*)get_out_group(0));
 
     // pack requirement model
     _Mem::Get()->pack_hlp(req);
     mdls_.push_back(req);
-    //Fact* m1_star = new Fact(m1, now, now, 1, 1);
 
      // create the first view of the requirement model and inject it 
     View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
