@@ -653,10 +653,6 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
       || _Mem::Get()->matches_axiom(bound_pattern->get_reference(0)))
     {
       // Inject each subgoal to the host if it matches the evidence (according to inect_goal function). Then push it to the components vector. 
-      Goal* sub_goal = new Goal(bound_pattern, f_super_goal->get_goal()->get_actor(), sim, 1);
-      _Fact* sub_goal_f = new Fact(sub_goal, now, now, 1, 1);
-      View* view = new View(View::SYNC_ONCE, now, confidence, 1, host, host, sub_goal_f); // SYNC_ONCE,res=1.
-      _Mem::Get()->inject(view);
       components.push_back(_TPX::Component(bound_pattern));
     }
     if (_Mem::Get()->matches_axiom(bound_pattern->get_reference(0)))
@@ -685,24 +681,30 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
   if(analogy) {
 
     _Fact* component = components[0].object;
-    new_cst = _TPX::build_cst_sim(components, bm, component, (Group*)get_out_group(0));
+    P<HLPBindingMap> bmcst = new HLPBindingMap();
+    new_cst = _TPX::build_cst_sim(components, bmcst, component, (Group*)get_out_group(0));
+    _Fact* f_icst = bmcst->build_f_ihlp(new_cst, Opcodes::ICst, false);
+    // build_f_ihlp can leave some variables pointing into bm, but we need everything valuated.
+    f_icst->set_reference(0, bmcst->bind_pattern(f_icst->get_reference(0)));
    // _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
     _Mem::Get()->pack_hlp(new_cst);
     View* view_cst = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, new_cst, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
     views_cst.push_back(view_cst);
     _Mem::Get()->inject_hlps(views_cst, host);
 
-    _Fact* f_icst = bm->build_f_ihlp(new_cst, Opcodes::ICst, false);
-
-    //Retrive the causal model that is needed for building a REQ model.
-    Code* crm = (((sim->get_reference(0))->get_reference(0))->get_reference(2))->get_reference(2);
+    auto crm_controller = (HLPController*)sim->get_f_super_goal()->get_goal()->get_sim()->solution_controller_;
+    P<HLPBindingMap> crm_binding_map = new HLPBindingMap(crm_controller->bindings_);
+    crm_binding_map->reset_fwd_timings(f_icst);
+    Code* crm = crm_controller->get_object();
 
     // Build instantiated causal model
-    P<Fact> f_icrm = bm->build_f_ihlp(crm, Opcodes::IMdl, false);
+    P<Fact> f_icrm = crm_binding_map->build_f_ihlp(crm, Opcodes::IMdl, false);
+
 
     // Build model head, guards, and model tail for a requirement model
     uint16 write_index;
-    P<Code> req = _TPX::build_mdl_head(bm, 0, f_icst, f_icrm, write_index);
+    P<BindingMap> _bm = new BindingMap();
+    P<Code> req = _TPX::build_mdl_head(_bm, 0, f_icst, f_icrm, write_index);
     P<GuardBuilder> guard_builder = new GuardBuilder();
     guard_builder->build(req, NULL, NULL, write_index);
     _TPX::build_mdl_tail_sim(req, write_index, (Group*)get_out_group(0));
