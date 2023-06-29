@@ -694,7 +694,8 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
 
     auto crm_controller = (HLPController*)sim->get_f_super_goal()->get_goal()->get_sim()->solution_controller_;
     P<HLPBindingMap> crm_binding_map = new HLPBindingMap(crm_controller->bindings_);
-    crm_binding_map->reset_fwd_timings(f_icst);
+    //crm_binding_map->reset_fwd_timings(f_icst);
+    crm_binding_map->init_from_f_ihlp(f_icst);
     Code* crm = crm_controller->get_object();
 
     // Build instantiated causal model
