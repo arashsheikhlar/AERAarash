@@ -638,7 +638,7 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
   vector<View*> views_cst;
   std::vector<P<r_code::Code> > mdls_; // new mdls
   std::vector<P<r_code::Code> > csts_;
-  bool analogy;
+  bool analogy = false;
 
   for (uint16 i = 1; i <= obj_count; ++i) {
 
@@ -659,8 +659,6 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
       // Don't make a goal of a member which is an axiom.
       continue;
 
-    if (opposite)
-      bound_pattern->set_opposite();
     switch (check_evidences(bound_pattern, evidence)) {
     case MATCH_SUCCESS_POSITIVE: // positive evidence, no need to produce a sub-goal: skip.
       break;
@@ -686,35 +684,37 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal) {
     _Fact* f_icst = bmcst->build_f_ihlp(new_cst, Opcodes::ICst, false);
     // build_f_ihlp can leave some variables pointing into bm, but we need everything valuated.
     f_icst->set_reference(0, bmcst->bind_pattern(f_icst->get_reference(0)));
-   // _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
+    // _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
     _Mem::Get()->pack_hlp(new_cst);
     View* view_cst = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, new_cst, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
     views_cst.push_back(view_cst);
     _Mem::Get()->inject_hlps(views_cst, host);
 
-    auto crm_controller = (HLPController*)sim->get_f_super_goal()->get_goal()->get_sim()->solution_controller_;
-    P<HLPBindingMap> crm_binding_map = new HLPBindingMap(crm_controller->bindings_);
-    //crm_binding_map->reset_fwd_timings(f_icst);
-    crm_binding_map->init_from_f_ihlp(f_icst);
-    Code* crm = crm_controller->get_object();
-
-    // Build instantiated causal model
-    P<Fact> f_icrm = crm_binding_map->build_f_ihlp(crm, Opcodes::IMdl, false);
-
-
+    
     // Build model head, guards, and model tail for a requirement model
+    auto req_controller = (MDLController*)sim->solution_controller_;
+    auto abstract_f_icst = req_controller->bindings_->abstract_f_ihlp(f_icst);
+    // The timings should have been set correctly when f_icst was created.
+    abstract_f_icst->code(FACT_AFTER) = req_controller->get_rhs()->code(FACT_AFTER);
+    abstract_f_icst->code(FACT_BEFORE) = req_controller->get_rhs()->code(FACT_BEFORE);
+    // For the abstract icst, we want wildcards here.
+    abstract_f_icst->code(FACT_CFD) = Atom::Wildcard();
+    abstract_f_icst->code(FACT_ARITY) = Atom::Wildcard();
+    abstract_f_icst->get_reference(0)->code(I_HLP_WEAK_REQUIREMENT_ENABLED) = Atom::Wildcard();
+    abstract_f_icst->get_reference(0)->code(I_HLP_ARITY) = Atom::Wildcard();
+
     uint16 write_index;
-    P<BindingMap> _bm = new BindingMap();
-    P<Code> req = _TPX::build_mdl_head(_bm, 0, f_icst, f_icrm, write_index);
+    P<Code> req = _TPX::build_mdl_head_from_abstract(0, abstract_f_icst, req_controller->get_rhs(), write_index);
     P<GuardBuilder> guard_builder = new GuardBuilder();
     guard_builder->build(req, NULL, NULL, write_index);
     _TPX::build_mdl_tail_sim(req, write_index, (Group*)get_out_group(0));
 
+    
     // pack requirement model
     _Mem::Get()->pack_hlp(req);
     mdls_.push_back(req);
 
-     // create the first view of the requirement model and inject it 
+    // create the first view of the requirement model and inject it 
     View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
     _Mem::Get()->inject(view_req);
 

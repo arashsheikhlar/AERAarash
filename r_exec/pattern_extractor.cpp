@@ -485,57 +485,67 @@ Code *_TPX::build_cst(const vector<Component> &components, BindingMap *bm, _Fact
   return cst;
 }
 
-Code *_TPX::build_mdl_head(HLPBindingMap *bm, uint16 tpl_arg_count, _Fact *lhs, _Fact *rhs, uint16 &write_index, bool allow_shared_timing_vars) {
+ Code* _TPX::build_mdl_head(HLPBindingMap* bm, uint16 tpl_arg_count, _Fact* lhs, _Fact* rhs, uint16& write_index, bool allow_shared_timing_vars) {
 
-  Code *mdl = _Mem::Get()->build_object(Atom::Model(Opcodes::Mdl, MDL_ARITY));
+   Code* mdl = _Mem::Get()->build_object(Atom::Model(Opcodes::Mdl, MDL_ARITY));
 
-  Code* abstract_lhs = bm->abstract_object(lhs, false, allow_shared_timing_vars ? 0 : -1);
-  mdl->add_reference(abstract_lhs); // reference lhs.
+   Code* abstract_lhs = bm->abstract_object(lhs, false, allow_shared_timing_vars ? 0 : -1);
+   mdl->add_reference(abstract_lhs); // reference lhs.
 
-  int rhs_first_search_index = (allow_shared_timing_vars ? 0 : -1);
-  if (abstract_lhs->get_reference(0)->code(0).asOpcode() == Opcodes::IMdl) {
-    Code* imdl = abstract_lhs->get_reference(0);
-    // This is a reuse model. When matching the timings of the RHS fact, first try the last two
-    // exposed args which came from the RHS timings of the imdl being reused.
-    auto exposed_args_index = imdl->code(I_HLP_EXPOSED_ARGS).asIndex();
-    auto exposed_args_count = imdl->code(exposed_args_index).getAtomCount();
-    auto exposed_after_index = exposed_args_index + (exposed_args_count - 1);
-    if (exposed_args_count >= 2 &&
-        imdl->code(exposed_after_index).getDescriptor() == Atom::VL_PTR)
-      rhs_first_search_index = imdl->code(exposed_after_index).asIndex();
-  }
-  mdl->add_reference(bm->abstract_object(rhs, false, rhs_first_search_index)); // reference rhs.
+   int rhs_first_search_index = (allow_shared_timing_vars ? 0 : -1);
+   if (abstract_lhs->get_reference(0)->code(0).asOpcode() == Opcodes::IMdl) {
+     Code* imdl = abstract_lhs->get_reference(0);
+     // This is a reuse model. When matching the timings of the RHS fact, first try the last two
+     // exposed args which came from the RHS timings of the imdl being reused.
+     auto exposed_args_index = imdl->code(I_HLP_EXPOSED_ARGS).asIndex();
+     auto exposed_args_count = imdl->code(exposed_args_index).getAtomCount();
+     auto exposed_after_index = exposed_args_index + (exposed_args_count - 1);
+     if (exposed_args_count >= 2 &&
+       imdl->code(exposed_after_index).getDescriptor() == Atom::VL_PTR)
+       rhs_first_search_index = imdl->code(exposed_after_index).asIndex();
+   }
+   Code* abstract_rhs = bm->abstract_object(rhs, false, rhs_first_search_index);
 
-  write_index = MDL_ARITY;
+   return build_mdl_head_from_abstract(tpl_arg_count, abstract_lhs, abstract_rhs, write_index);
+ }
 
-  mdl->code(MDL_TPL_ARGS) = Atom::IPointer(++write_index);
-  if (tpl_arg_count >= 2) {
-    // Assume the last two template args are a time interval.
-    mdl->code(write_index) = Atom::Set(tpl_arg_count - 1);
-    // Write the template args before the time interval.
-    for (uint16 i = 0; i < tpl_arg_count - 2; ++i)
-      mdl->code(++write_index) = Atom::VLPointer(i);
-    ++write_index;
-    mdl->code(write_index) = Atom::IPointer(write_index + 1);
-    ++write_index;
-    // Make the (ti : :) .
-    mdl->code(write_index) = Atom::Object(Opcodes::TI, 2);
-    mdl->code(++write_index) = Atom::VLPointer(tpl_arg_count - 2);
-    mdl->code(++write_index) = Atom::VLPointer(tpl_arg_count - 1);
-  }
-  else {
-    mdl->code(write_index) = Atom::Set(tpl_arg_count);
-    for (uint16 i = 0; i < tpl_arg_count; ++i)
-      mdl->code(++write_index) = Atom::VLPointer(i);
-  }
 
-  mdl->code(MDL_OBJS) = Atom::IPointer(++write_index);
-  mdl->code(write_index) = Atom::Set(2);
-  mdl->code(++write_index) = Atom::RPointer(0);
-  mdl->code(++write_index) = Atom::RPointer(1);
+ Code* _TPX::build_mdl_head_from_abstract(uint16 tpl_arg_count, Code* abstract_lhs, Code* abstract_rhs, uint16& write_index) {
+   Code* mdl = _Mem::Get()->build_object(Atom::Model(Opcodes::Mdl, MDL_ARITY));
+   mdl->add_reference(abstract_lhs); // reference lhs.
+   mdl->add_reference(abstract_rhs); // reference rhs.
 
-  return mdl;
-}
+   write_index = MDL_ARITY;
+
+   mdl->code(MDL_TPL_ARGS) = Atom::IPointer(++write_index);
+   if (tpl_arg_count >= 2) {
+     // Assume the last two template args are a time interval.
+     mdl->code(write_index) = Atom::Set(tpl_arg_count - 1);
+     // Write the template args before the time interval.
+     for (uint16 i = 0; i < tpl_arg_count - 2; ++i)
+       mdl->code(++write_index) = Atom::VLPointer(i);
+     ++write_index;
+     mdl->code(write_index) = Atom::IPointer(write_index + 1);
+     ++write_index;
+     // Make the (ti : :) .
+     mdl->code(write_index) = Atom::Object(Opcodes::TI, 2);
+     mdl->code(++write_index) = Atom::VLPointer(tpl_arg_count - 2);
+     mdl->code(++write_index) = Atom::VLPointer(tpl_arg_count - 1);
+   }
+   else {
+     mdl->code(write_index) = Atom::Set(tpl_arg_count);
+     for (uint16 i = 0; i < tpl_arg_count; ++i)
+       mdl->code(++write_index) = Atom::VLPointer(i);
+   }
+
+   mdl->code(MDL_OBJS) = Atom::IPointer(++write_index);
+   mdl->code(write_index) = Atom::Set(2);
+   mdl->code(++write_index) = Atom::RPointer(0);
+   mdl->code(++write_index) = Atom::RPointer(1);
+
+   return mdl;
+ }
+
 
 void _TPX::build_mdl_tail(Code *mdl, uint16 write_index) {
 
