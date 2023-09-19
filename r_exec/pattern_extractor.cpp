@@ -6,6 +6,7 @@
 //_/_/ Copyright (c) 2018-2023 Jeff Thompson
 //_/_/ Copyright (c) 2018-2023 Kristinn R. Thorisson
 //_/_/ Copyright (c) 2018-2023 Icelandic Institute for Intelligent Machines
+//_/_/ Copyright (c) 2023 Leonard M. Eberding
 //_/_/ http://www.iiim.is
 //_/_/ 
 //_/_/ Copyright (c) 2010-2012 Eric Nivel
@@ -86,6 +87,7 @@
 #include "reduction_job.h"
 #include "mem.h"
 #include "model_base.h"
+#include "hlp_context.h"
 #include "mdl_controller.h"
 
 using namespace std;
@@ -827,6 +829,10 @@ void PTPX::reduce(r_exec::View *input) {
   P<_Fact> consequent = new Fact(f_imdl->get_reference(0), f_imdl_after, f_imdl_before, f_imdl->get_cfd(), f_imdl->get_psln_thr());
   consequent->set_opposite();
 
+  vector<Input> discarded_f_mk_vals;
+  vector<Input> discarded_f_icsts;
+  vector<Code*> accepted_mk_vals;
+
   P<BindingMap> end_bm = new BindingMap();
   {
     // Call abstract_object only to update the binding map.
@@ -835,13 +841,68 @@ void PTPX::reduce(r_exec::View *input) {
   r_code::list<Input>::const_iterator i;
   for (i = inputs_.begin(); i != inputs_.end();) { // filter out inputs irrelevant for the prediction.
 
-    if (i->input_->get_reference(0)->code(0).asOpcode() == Opcodes::Cmd) // no cmds as req lhs (because no bwd-operational); prefer: cmd->effect, effect->imdl.
+    if (i->input_->get_reference(0)->code(0).asOpcode() == Opcodes::Cmd)
+      // no cmds as req lhs (because no bwd-operational); prefer: cmd->effect, effect->imdl.
       i = inputs_.erase(i);
-    else if (!end_bm->intersect(i->bindings_) || // discard inputs that do not share values with the consequent.
-             i->input_->get_after() > consequent->get_after()) // discard inputs that started after the consequent started.
+    else if (i->input_->get_after() > consequent->get_after())
+      // discard inputs that started after the consequent started.
       i = inputs_.erase(i);
-    else
+    else if (!end_bm->intersect(i->bindings_)) {
+      // discard inputs that do not share values with the consequent.
+      if (i->input_->get_reference(0)->code(0).asOpcode() == Opcodes::MkVal &&
+          !_Mem::Get()->matches_axiom(i->input_->get_reference(0)))
+        // Save for below.
+        discarded_f_mk_vals.push_back(*i);
+      else if (i->input_->get_reference(0)->code(0).asOpcode() == Opcodes::ICst)
+        // Save for below.
+        discarded_f_icsts.push_back(*i);
+
+      i = inputs_.erase(i);
+    }
+    else {
+      if (i->input_->get_reference(0)->code(0).asOpcode() == Opcodes::MkVal &&
+          !_Mem::Get()->matches_axiom(i->input_->get_reference(0)))
+        // Save for below.
+        accepted_mk_vals.push_back(i->input_->get_reference(0));
+
       ++i;
+    }
+  }
+
+  // Only keep discarded mk.vals that share "attribute, value" with at least one accepted mk.val.
+  for (auto f_mk_val = discarded_f_mk_vals.begin(); f_mk_val != discarded_f_mk_vals.end();) {
+    bool match = false;
+    for (auto accepted = accepted_mk_vals.begin(); accepted != accepted_mk_vals.end(); ++accepted) {
+      // Skip the mk.val object. Start matching from the attribute.
+      if (_Fact::Match(f_mk_val->input_->get_reference(0), 0, MK_VAL_ATTR,
+                       *accepted, MK_VAL_ATTR, MK_VAL_ARITY)) {
+        match = true;
+        break;
+      }
+    }
+
+    if (match) {
+      // Restore as an accepted input.
+      inputs_.push_back(Input(*f_mk_val));
+      ++f_mk_val;
+    }
+    else
+      f_mk_val = discarded_f_mk_vals.erase(f_mk_val);
+  }
+
+  // Find discarded f_icsts which have a discarded mk.val (which shares an "attribute, value" with an accepted mk.val).
+  for (auto f_icst = discarded_f_icsts.begin(); f_icst != discarded_f_icsts.end(); ++f_icst) {
+    bool contains = false;
+    for (auto f_mk_val = discarded_f_mk_vals.begin(); f_mk_val != discarded_f_mk_vals.end(); ++f_mk_val) {
+      if (((ICST*)f_icst->input_->get_reference(0))->r_contains(f_mk_val->input_)) {
+        contains = true;
+        break;
+      }
+    }
+
+    if (contains)
+      // Restore as an accepted input.
+      inputs_.push_back(Input(*f_icst));
   }
 
   P<GuardBuilder> guard_builder;
@@ -1051,11 +1112,16 @@ void CTPX::reduce(r_exec::View *input) {
       ++i;
   }
 
-  bool need_guard;
-  if (target_->get_reference(0)->code(0).asOpcode() == Opcodes::MkVal)
-    need_guard = target_->get_reference(0)->code(MK_VAL_VALUE).isFloat();
-  else
-    need_guard = false;
+  bool need_guard = false;
+  if (target_->get_reference(0)->code(0).asOpcode() == Opcodes::MkVal) {
+    Atom target_val = target_->get_reference(0)->code(MK_VAL_VALUE);
+    if (target_val.isFloat())
+      need_guard = true;
+    else if (target_val.getDescriptor() == Atom::I_PTR) {
+      if (hasUserDefinedOperators(target_->get_reference(0)->code(target_val.asIndex()).asOpcode()))
+        need_guard = true;
+    }
+  }
 
   auto period = duration_cast<microseconds>(Utils::GetTimestamp<Code>(consequent, FACT_AFTER) - Utils::GetTimestamp<Code>(target_, FACT_AFTER)); // sampling period.
   P<GuardBuilder> guard_builder;
@@ -1127,43 +1193,82 @@ GuardBuilder *CTPX::find_guard_builder(_Fact *cause, _Fact *consequent, microsec
   Code *cause_payload = cause->get_reference(0);
   uint16 opcode = cause_payload->code(0).asOpcode();
   if (opcode == Opcodes::Cmd) {
-    // Form 1
-    float32 q0 = target_->get_reference(0)->code(MK_VAL_VALUE).asFloat();
-    float32 q1 = consequent->get_reference(0)->code(MK_VAL_VALUE).asFloat();
-
-    // Form 1A
-    float32 searched_for = q1 - q0;
     uint16 cmd_arg_set_index = cause_payload->code(CMD_ARGS).asIndex();
     uint16 cmd_arg_count = cause_payload->code(cmd_arg_set_index).getAtomCount();
-    for (uint16 i = 1; i <= cmd_arg_count; ++i) {
 
-      Atom s = cause_payload->code(cmd_arg_set_index + i);
-      if (!s.isFloat())
-        continue;
-      float32 _s = s.asFloat();
-      if (Utils::Equal(_s, searched_for)) {
-        auto offset = duration_cast<microseconds>(Utils::GetTimestamp<Code>(cause, FACT_AFTER) - Utils::GetTimestamp<Code>(target_, FACT_AFTER));
-        return new ACGuardBuilder(period, period - offset, cmd_arg_set_index + i);
+    // Form 1
+    // Form 1A
+    // Build the expression (- q1 q0), copying the code structure at q1 and q0 and evaluate it.
+    auto result = OpContext::build_and_evaluate_expression(target_, consequent, Atom::Operator(Opcodes::Sub, 2));
+
+    //Check whether a valid result was returned.
+    int index = -1;
+    for (size_t i = 0; i < result.size(); ++i) {
+      if (result[i] != Atom::Nil()) {
+        index = i;
+        break;
+      }
+    }
+    // Match the result to the cause_payload.
+    if (index != -1) {
+      LocalObject searched_for;
+      uint16 extent_index = 0;
+      StructureValue::copy_structure(&searched_for, extent_index, &result[index], 0);
+
+      for (uint16 i = 1; i <= cmd_arg_count; ++i) {
+        Atom s = cause_payload->code(cmd_arg_set_index + i);
+        uint16 cmd_index = cmd_arg_set_index + i;
+        bool match = false;
+        if (s.getDescriptor() == Atom::I_PTR) {
+          cmd_index = s.asIndex();
+          match = _Fact::MatchStructure(cause_payload, cmd_index, 0, &searched_for, 0, s.getAtomCount());
+        }
+        else {
+          match = _Fact::Match(cause_payload, cmd_index, 0, &searched_for, 0, s.getAtomCount());
+        }
+        if (match) {
+          auto offset = duration_cast<microseconds>(Utils::GetTimestamp<Code>(cause, FACT_AFTER) - Utils::GetTimestamp<Code>(target_, FACT_AFTER));
+          return new ACGuardBuilder(period, period - offset, cmd_arg_set_index + i);
+        }
       }
     }
 
-    if (q0 != 0) {
-      // Form 1B
-      searched_for = q1 / q0;
-      for (uint16 i = cmd_arg_set_index + 1; i <= cmd_arg_count; ++i) {
+    // Form 1B
+    // Build the expression (/ q1 q0), copying the code structure at q1 and q0 and evaluate it.
+    result = OpContext::build_and_evaluate_expression(target_, consequent, Atom::Operator(Opcodes::Div, 2));
 
-        Atom s = cause_payload->code(i);
-        if (!s.isFloat())
-          continue;
-        float32 _s = s.asFloat();
-        if (Utils::Equal(_s, searched_for)) {
+    //Check whether a valid result was returned.
+    index = -1;
+    for (int i = 0; i < result.size(); ++i) {
+      if (result[i] != Atom::Nil()) {
+        index = i;
+        break;
+      }
+    }
+
+    // Match the result to the cause_payload.
+    if (index != -1) {
+      LocalObject searched_for;
+      uint16 extent_index = 0;
+      StructureValue::copy_structure(&searched_for, extent_index, &result[index], 0);
+      for (uint16 i = 1; i <= cmd_arg_count; ++i) {
+        Atom s = cause_payload->code(cmd_arg_set_index + i);
+        uint16 cmd_index = cmd_arg_set_index + i;
+        bool match = false;
+        if (s.getDescriptor() == Atom::I_PTR) {
+          cmd_index = s.asIndex();
+          match = _Fact::MatchStructure(cause_payload, cmd_index, 0, &searched_for, 0, s.getAtomCount());
+        }
+        else {
+          match = _Fact::Match(cause_payload, cmd_index, 0, &searched_for, 0, s.getAtomCount());
+        }
+        if (match) {
           auto offset = duration_cast<microseconds>(Utils::GetTimestamp<Code>(cause, FACT_AFTER) - Utils::GetTimestamp<Code>(target_, FACT_AFTER));
-          return new MCGuardBuilder(period, period - offset, i);
+          return new MCGuardBuilder(period, period - offset, cmd_arg_set_index + i);
         }
       }
     }
   }
-
   else if (opcode == Opcodes::IMdl) {
     // Form 1
     float32 q0 = target_->get_reference(0)->code(MK_VAL_VALUE).asFloat();
@@ -1238,6 +1343,9 @@ GuardBuilder *CTPX::find_guard_builder(_Fact *cause, _Fact *consequent, microsec
 
   return NULL;
 }
+
+
+
 
 // m0:[premise.value premise.after premise.before][cause->consequent].
 // m1:[icst->imdl m0[...][...]] with icst containing the premise.

@@ -186,11 +186,12 @@ protected:
   class RequirementEntry : // use for requirements.
     public PredictedEvidenceEntry {
   public:
+    P<_Fact> input_;
     P<MDLController> controller_; // of the requirement.
     bool chaining_was_allowed_;
 
     RequirementEntry();
-    RequirementEntry(_Fact *f_p_f_imdl, MDLController *c, bool chaining_was_allowed); // f_imdl is f0 as in f0->pred->f1->imdl.
+    RequirementEntry(_Fact *f_p_f_imdl, _Fact* input, MDLController *c, bool chaining_was_allowed); // f_imdl is f0 as in f0->pred->f1->imdl.
 
     bool is_out_of_range(Timestamp now) const { return (before_<now || after_>now); }
   };
@@ -287,7 +288,7 @@ public:
   /**
    * If f_p_f_imdl->get_pred()->is_simulation(), then this is for a simulation.
    */
-  virtual void store_requirement(_Fact *f_p_f_imdl, MDLController *controller, bool chaining_was_allowed) = 0;
+  virtual void store_requirement(_Fact *f_p_f_imdl, _Fact* input, MDLController *controller, bool chaining_was_allowed) = 0;
   ChainingStatus retrieve_imdl_fwd(const HLPBindingMap *bm, Fact *f_imdl, RequirementsPair &r_p, std::vector<BindingResult>& results, MDLController *req_controller, bool &wr_enabled); // checks the requirement instances during fwd; r_p: all wrs in first, all srs in second.
   ChainingStatus retrieve_imdl_bwd(HLPBindingMap *bm, Fact *f_imdl, Fact *&ground, Fact *&strong_requirement_ground); // checks the requirement instances during bwd; ground is set to the best weak requirement if chaining allowed, NULL otherwise.
   ChainingStatus retrieve_simulated_imdl_fwd(const HLPBindingMap *bm, Fact *f_imdl, Sim* sim, std::vector<BindingResult>& results);
@@ -308,19 +309,18 @@ public:
   void register_requirement(_Fact *f_pred, RequirementsPair &r_p);
 
   /**
-   * Get the last two values from the imdl template values, assuming that they are the timings
+   * Get the two timestamps from the last template value which is a ti value, assuming that they are the timings
    * from the prerequisite model.
    * \param imdl The imdl object.
    * \param after Set this to the after timestamp (if this returns true).
    * \param before Set this to the before timestamp (if this returns true).
-   * \param allow_ti If true, allow the last template value to be a (ti After: Before:). If omitted, use true.
    * \param (optional) after_ts_index If not NULL, set this to the index in imdl Code array of the after time stamp structure.
    * \param (optional)  before_ts_index If not NULL, set this to the index in imdl Code array of the before time stamp structure.
    * \return True for success, otherwise false if there are not enough template parameters,
    * or if the value is some type other than a timestamp (such as an unbound variable).
    */
   static bool get_imdl_template_timings(
-    r_code::Code* imdl, Timestamp& after, Timestamp& before, bool allow_ti = true, uint16* after_ts_index = NULL, uint16* before_ts_index = NULL);
+    r_code::Code* imdl, Timestamp& after, Timestamp& before, uint16* after_ts_index = NULL, uint16* before_ts_index = NULL);
 };
 
 class PMDLController :
@@ -391,7 +391,7 @@ public:
   void take_input(r_exec::View *input) override;
   void reduce(r_exec::View *input);
 
-  void store_requirement(_Fact *f_p_f_imdl, MDLController *controller, bool chaining_was_allowed) override; // never called.
+  void store_requirement(_Fact *f_p_f_imdl, _Fact* input, MDLController *controller, bool chaining_was_allowed) override; // never called.
 
   void predict(HLPBindingMap *bm, _Fact *input, Fact *f_imdl, bool chaining_was_allowed, RequirementsPair &r_p, Fact *ground,
     std::vector<P<_Fact> >& already_predicted) override;
@@ -465,7 +465,7 @@ public:
   void reduce(r_exec::View *input);
   void reduce_batch(Fact *f_p_f_imdl, MDLController *controller);
 
-  void store_requirement(_Fact *f_p_f_imdl, MDLController *controller, bool chaining_was_allowed) override;
+  void store_requirement(_Fact *f_p_f_imdl, _Fact* input, MDLController *controller, bool chaining_was_allowed) override;
 
   void predict(HLPBindingMap *bm, _Fact *input, Fact *f_imdl, bool chaining_was_allowed, RequirementsPair &r_p, Fact *ground,
     std::vector<P<_Fact> >& already_predicted) override;
@@ -504,7 +504,7 @@ public:
   void abduce_no_simulation(Fact *super_goal, bool opposite, float32 confidence, _Fact* f_p_f_success = NULL);
 
   /**
-   * Get the last two values from the template parameters, assuming that they are the timings
+   * Get the two timestamps from the last template value which is a ti value, assuming that they are the timings
    * from the prerequisite model. This evaluates the backward guards if needed.
    * \param bm The binding map, which is not changed.
    * \param after Set this to the after timestamp (if this returns true).
@@ -541,7 +541,7 @@ public:
   void reduce(r_exec::View *input);
   void reduce_batch(Fact *f_p_f_imdl, MDLController *controller);
 
-  void store_requirement(_Fact *f_p_f_imdl, MDLController *controller, bool chaining_was_allowed) override;
+  void store_requirement(_Fact *f_p_f_imdl, _Fact* input, MDLController *controller, bool chaining_was_allowed) override;
 
   void predict(HLPBindingMap *bm, _Fact *input, Fact *f_imdl, bool chaining_was_allowed, RequirementsPair &r_p, Fact *ground,
     std::vector<P<_Fact> >& already_predicted) override;

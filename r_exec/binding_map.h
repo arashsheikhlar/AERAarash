@@ -177,15 +177,32 @@ class r_exec_dll StructureValue :
   public BoundValue {
 private:
   P<r_code::Code> structure_;
-  StructureValue(BindingMap *map, const r_code::Code *structure);
+  StructureValue(BindingMap* map, const r_code::Code* structure)
+    : StructureValue(map, &structure->code(0), 0) {}
 public:
-  StructureValue(BindingMap *map, const r_code::Code *source, uint16 structure_index);
+  StructureValue(BindingMap *map, const r_code::Code *source, uint16 structure_index)
+    : StructureValue(map, &source->code(0), structure_index) {}
   StructureValue(BindingMap *map, const Atom *source, uint16 structure_index);
   StructureValue(BindingMap *map, Timestamp time);
   StructureValue(BindingMap *map, std::chrono::microseconds duration);
 
   Value *copy(BindingMap *map) const override;
-  void valuate(r_code::Code *destination, uint16 write_index, uint16 &extent_index) const override;
+  void valuate(r_code::Code* destination, uint16 write_index, uint16& extent_index) const override {
+    destination->code(write_index) = Atom::IPointer(extent_index);
+    copy_structure(destination, extent_index, &structure_->code(0), 0);
+  }
+
+  /**
+   * This is a helper to copy the structure starting at source(source_index) to the destination at extent_index.
+   * If needed, you should already have done destination->code(write_index) = Atom::IPointer(extent_index);
+   * This copies the structure to destination[extent_index].
+   * \param destination The destination code.
+   * \param extent_index Copy the structure to destination starting at this index and update the index.
+   * \param source_index Copy the structure from code(source_index).
+   */
+  static void copy_structure(
+    r_code::Code* destination, uint16& extent_index, const Atom* source, uint16 source_index);
+
   bool match(const r_code::Code *object, uint16 index) override;
   Atom *get_code() override;
   r_code::Code *get_object() override;
@@ -271,7 +288,7 @@ public:
 
   void init(const r_code::Code *object, uint16 index);
 
-  static _Fact* abstract_f_ihlp(const _Fact* fact); // for icst and imdl.
+  static _Fact *abstract_f_ihlp(const _Fact *fact); // for icst and imdl.
 
   /**
    * Fill in the fresh fact object as an abstract copy of the original fact, creating new bindings as needed.
@@ -380,7 +397,20 @@ private:
   bool match_bwd_timings(const _Fact *f_object, const _Fact *f_pattern);
 
   bool need_binding(r_code::Code *pattern) const;
-  void init_from_pattern(const r_code::Code *source, int16 position); // first source is f->obj.
+
+  /**
+   * If source->code(FACT_AFTER) and source->code(FACT_BEFORE) are VL_PTR, then set the respective
+   * after_index and before_index.
+   */
+  void init_timing_indexes(const r_code::Code* source, int16& after_index, int16& before_index) {
+    if (source->code_size() <= FACT_BEFORE)
+      // We don't expect this.
+      return;
+    if (source->code(FACT_AFTER).getDescriptor() == Atom::VL_PTR)
+      after_index = source->code(FACT_AFTER).asIndex();
+    if (source->code(FACT_BEFORE).getDescriptor() == Atom::VL_PTR)
+      before_index = source->code(FACT_BEFORE).asIndex();
+  }
 
   /**
    * Scan the structure in hlp at structure_index and call add_unbound_value for each VL_PTR.
@@ -420,7 +450,7 @@ public:
   void load(const HLPBindingMap *source);
   void clear() override;
 
-  void init_from_hlp(const r_code::Code *hlp);
+  void init_from_hlp(const r_code::Code *hlp, const r_code::Code* packed_hlp);
   void init_from_f_ihlp(const _Fact *f_ihlp);
   Fact *build_f_ihlp(r_code::Code *hlp, uint16 opcode, bool wr_enabled) const; // return f->ihlp.
   r_code::Code *bind_pattern(r_code::Code *pattern) const;

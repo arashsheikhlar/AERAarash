@@ -1058,24 +1058,78 @@ Simulator
 * Webots
   * DONE. Link to Debug version of Protobuf library. [Leonard] https://github.com/IIIM-IS/AERA/pull/252
 
-next meeting
-* Cisco demo: Traceroute.
+2023-05-19
+* DONE. Make temporary fix for Visualizer crash. If enabled, skip deleting memory when resizing a vector. Doesn't crash, but leaks memory.
+* DONE. Update AERA to make it easier to statically link in AERA_Visualizer.
 * Webots
-  * Reproducability: Wait until 65 ms to execute command.
-  * Let AERA send "reset" message to reset the environment. (Use after grab fails.)
-  * init() should "instantly" set the arm position. Right now it move to the init position and can hit objects.
-  * (Added hack to reset positions after release.)
+  * DONE. Make pull request to wait until 65 ms to execute command and wait for it to complete. https://github.com/IIIM-IS/AERA_Webots/pull/9
+
+2023-05-25
+* DONE. Merge Leonard's AERA_Protobuf submodule update https://github.com/IIIM-IS/AERA/pull/256
+* DONE. Make hand-grab-sphere work with (vec [25 0 0]) .
+* Webots
+
+2023-06-09
+* DONE. Make pull request for bound objects with sub-structures https://github.com/IIIM-IS/AERA/pull/257
+* Webots
+  * DONE. Update AERA_Webots to use the AERA_Protobuf submodule https://github.com/IIIM-IS/AERA_Webots/pull/10
+  * DONE. Put code in usr_operators in a namespace. Implement vec3 div. (No conflict with Windows div.)
+  * DONE (side effect). Reset the TCP connection when resetting the Webots simulation
+  * Make CTPX work with vec3 for the move model DeltaP.
+    * DONE. Add temporary special case in CTPX for vec3. [Jeff]
+
+2023-07-06
+* DONE. Merge pull request to fix out-of-bounds error (seen by Chloe) https://github.com/IIIM-IS/AERA/pull/261
+* Webots
+  * DONE. Make CTPX work with vec3 for the move model DeltaP.
+
+2023-07-13
+* DONE. Merge request to fix bug in abstract_f_ihlp (for Arash) https://github.com/IIIM-IS/AERA/pull/262
+
+2023-07-27
+* DONE. Merge request for PTPX to accept objects with same "attribute, value" https://github.com/IIIM-IS/AERA/pull/263
+
+2023-08-10
+* DONE. Look for the AERA code for removing a model for disuse.
+  RESULT: Model view is "forever". I think it is not implemented. Couldn't find this described in the Replicode Tech Report.
+* Webots
+  * DONE. Try camera [Leonard]
+
+2023-08-18
+* DONE. Update "Perceptual Explanation" slide for robot example.
+* DONE. Merge Leonard's pull request for decoding Atoms in Visual Studio https://github.com/IIIM-IS/AERA/pull/268
+* DONE. Merge Leonard's pull request for generalized operators https://github.com/IIIM-IS/AERA/pull/266
+* DONE. Merge Leonard's pull request for multi-dimensional marker values in TCP (Webots) https://github.com/IIIM-IS/AERA/pull/267
+
+2023-08-25
+* DONE. Merge request to fix bug initializing CST binding map https://github.com/IIIM-IS/AERA/pull/260
+* DONE. Merge request to remove unneded TemplateTimingsUpdater https://github.com/IIIM-IS/AERA/pull/269
+* Discuss: Simulation forward chaining vs. argumentation
+
+2023-08-31
+DONE. Fix Webots to fix includes for the Eigen library.
+DONE. Merge pull request to use microseconds for Timestamp https://github.com/IIIM-IS/AERA/pull/270
+* Webots
+  * DONE. Webots (occasionally) sends data for rotation which confuses the current example. [Leonard]
+  * DONE. This should either include the Eigen library as a submodule, or update the README with instructions to install it. [Leonard]
+  * DONE. Generalize CTPX for all strucured types (vec2, vec3, vec [], etc.) [Leonard]
+
+2023-09-08
+* DONE. Merge pull request to update projects to SDK 18362 (for Visual Studio 2022). https://github.com/IIIM-IS/AERA/pull/271
+
+next meeting
+* Webots
+  * In TCPConnection add both client and server versions of establishConnection. (Move TCPConnection to AERA_Protobuf?)
+  * Put a tray at the goal position
+  * Set position of boxes on initial load to the correct position
+  * Align Webots aera_us with AERA time.
   * Use setup command for automatic discovery of AERA objects and commands
   * Get command efferent copy from Webots (move limit to +/- 20) [Maybe in the setup message or command reply. Need more discussion]
-  * Reset the TCP connection when resetting the Webots simulation
-  * Make Visual Studio run protoc in AERA and AERA_Webots [Leonard to try]
-  * Try camera
-* Demonstrate AERA removing model for disuse.
-* Try (for 6 hours) to debug the Visualizer crash.
+  * Try Webots streaming to the Visualize [Chloe]
 * hand-grab-sphere
-  * Represent sphere position without direct I/O input.
   * Make AERA take experimenting actions to test candidate PTPX models (instead of seed commands).
     * Still need to allow multiple strong requirements in retrieve_imdl.
+  * Represent sphere position without direct I/O input.
 
 TODO
 * Change (success) to refer to the prediction mk.rdx instead of the prediction. (Affects other code.)

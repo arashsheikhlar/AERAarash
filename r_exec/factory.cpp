@@ -417,7 +417,7 @@ bool _Fact::CounterEvidence(const Code *lhs, const Code *rhs) {
       case Atom::R_PTR:
         return !MatchObject(lhs->get_reference(lhs->code(MK_VAL_VALUE).asIndex()), rhs->get_reference(rhs->code(MK_VAL_VALUE).asIndex()));
       case Atom::I_PTR:
-        return !MatchStructure(lhs, MK_VAL_VALUE, lhs_atom.asIndex(), rhs, rhs_atom.asIndex(), false);
+        return !MatchStructure(lhs, lhs_atom.asIndex(), 0, rhs, rhs_atom.asIndex(), false);
       default:
         return !MatchAtom(lhs_atom, rhs_atom);
       }
@@ -925,4 +925,19 @@ bool ICST::contains(const _Fact *component, uint16 &component_index) const {
 
   return false;
 }
+
+bool ICST::r_contains(const _Fact* component) const {
+
+  for (auto i = components_.begin(); i != components_.end(); ++i) {
+    if (*i == component)
+      return true;
+
+    if ((*i)->get_reference(0)->code(0).asOpcode() == Opcodes::ICst &&
+        ((ICST*)(*i)->get_reference(0))->r_contains(component))
+      return true;
+  }
+
+  return false;
+}
+
 }

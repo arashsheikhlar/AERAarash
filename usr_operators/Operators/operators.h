@@ -88,16 +88,19 @@
 #include "../types.h"
 
 
-extern "C" {
-bool dll_export add(const r_exec::Context &context);
-bool dll_export sub(const r_exec::Context &context);
-bool dll_export mul(const r_exec::Context &context);
-bool dll_export dis(const r_exec::Context &context);
+namespace usr_operators {
+
+bool add(const r_exec::Context &context);
+bool sub(const r_exec::Context &context);
+bool mul(const r_exec::Context &context);
+bool div(const r_exec::Context& context);
+bool dis(const r_exec::Context &context);
+
 }
 
 class Operators {
 public:
-  static void Init(OpcodeRetriever r);
+  static r_code::resized_vector<uint16> Init(OpcodeRetriever r);
 };
 
 

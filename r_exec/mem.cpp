@@ -295,7 +295,7 @@ void _Mem::store(Code *object) {
   object->set_strorage_index(location);
 }
 
-bool _Mem::load(vector<r_code::Code *> *objects, uint32 stdin_oid, uint32 stdout_oid, uint32 self_oid) { // no cov at init time.
+bool _Mem::load(const vector<r_code::Code *> *objects, uint32 stdin_oid, uint32 stdout_oid, uint32 self_oid) { // no cov at init time.
 
   uint32 i;
   reduction_cores_ = new ReductionCore *[reduction_core_count_];
@@ -571,6 +571,7 @@ bool DiagnosticTimeState::step() {
     size_t n_jobs_to_run = min(reduction_job_queue_.size(), max_reduction_jobs_per_cycle);
     if (n_jobs_to_run > 0) {
       if (reduction_job_queue_index_ < n_jobs_to_run) {
+        // Add breakpoint here to check which reduction job leads to the failure.
         reduction_job_queue_[reduction_job_queue_index_]->update(Now());
         reduction_job_queue_[reduction_job_queue_index_] = NULL;
         ++reduction_job_queue_index_;
@@ -837,6 +838,33 @@ View* _Mem::inject_marker_value_from_io_device(
 }
 
 View* _Mem::inject_marker_value_from_io_device(
+  Code* obj, Code* prop, std::vector<Atom> val, Timestamp after, Timestamp before,
+  View::SyncMode sync_mode, Code* group)
+{
+  if (!obj || !prop)
+    // We don't expect this, but sanity check.
+    return NULL;
+
+  Code* object = new LObject(this);
+  uint16 extent_index = 4;
+  object->code(0) = Atom::Marker(GetOpcode("mk.val"), 4); // Caveat: arity does not include the opcode.
+  object->code(1) = Atom::RPointer(0); // obj
+  object->code(2) = Atom::RPointer(1); // prop
+  object->code(3) = Atom::IPointer(++extent_index);
+  object->code(4) = Atom::Float(1); // psln_thr.
+
+
+  object->set_reference(0, obj);
+  object->set_reference(1, prop);
+  object->code(extent_index) = Atom::Set(val.size());
+  for (uint16 i = 0; i < val.size(); ++i) {
+    object->code(++extent_index) = val[i];
+  }
+
+  return inject_fact_from_io_device(object, after, before, sync_mode, group);
+}
+
+View* _Mem::inject_marker_value_from_io_device(
   Code* obj, Code* prop, Code* val, Timestamp after, Timestamp before,
   View::SyncMode sync_mode, Code* group)
 {
@@ -854,6 +882,28 @@ View* _Mem::inject_marker_value_from_io_device(
   object->set_reference(0, obj);
   object->set_reference(1, prop);
   object->set_reference(2, val);
+
+  return inject_fact_from_io_device(object, after, before, sync_mode, group);
+}
+
+View* _Mem::inject_marker_value_from_io_device(
+  Code* obj, Code* prop, const std::string& val, Timestamp after, Timestamp before, View::SyncMode sync_mode, Code* group)
+{
+  if (!obj || !prop)
+    // We don't expect this, but sanity check.
+    return NULL;
+
+  Code* object = new LObject(this);
+  uint16 extent_index = 4;
+  object->code(0) = Atom::Marker(GetOpcode("mk.val"), 4); // Caveat: arity does not include the opcode.
+  object->code(1) = Atom::RPointer(0); // obj
+  object->set_reference(0, obj);
+  object->code(2) = Atom::RPointer(1); // prop
+  object->set_reference(1, prop);
+  object->code(3) = Atom::IPointer(++extent_index); // val
+  object->code(4) = Atom::Float(1); // psln_thr.
+
+  Utils::SetString<Code>(object, 3, val);
 
   return inject_fact_from_io_device(object, after, before, sync_mode, group);
 }
@@ -880,6 +930,32 @@ View* _Mem::inject_marker_value_from_io_device(
   for (uint16 i = 0; i < val.size(); ++i) {
     object->code(++extent_index) = Atom::RPointer(object->references_size());
     object->set_reference(object->references_size(), val[i]);
+  }
+
+  return inject_fact_from_io_device(object, after, before, sync_mode, group);
+}
+
+View* _Mem::inject_marker_value_from_io_device(
+  Code* obj, Code* prop, uint16 opcode, const vector<Atom>& vals, Timestamp after, Timestamp before,
+  View::SyncMode sync_mode, Code* group)
+{
+  if (!obj || !prop)
+    // We don't expect this, but sanity check.
+    return NULL;
+
+  Code* object = new LObject(this);
+  uint16 extent_index = 4;
+  object->code(0) = Atom::Marker(GetOpcode("mk.val"), 4); // Caveat: arity does not include the opcode.
+  object->code(1) = Atom::RPointer(0); // obj
+  object->set_reference(0, obj);
+  object->code(2) = Atom::RPointer(1); // prop
+  object->set_reference(1, prop);
+  object->code(3) = Atom::IPointer(++extent_index); // val
+  object->code(4) = Atom::Float(1); // psln_thr.
+
+  object->code(extent_index++) = Atom::Object(opcode, vals.size());
+  for (uint16 i = 0; i < vals.size(); ++i) {
+    object->code(extent_index++) = vals[i];
   }
 
   return inject_fact_from_io_device(object, after, before, sync_mode, group);
@@ -924,20 +1000,8 @@ void _Mem::inject(View *view, bool is_from_io_device) {
     }
   } else { // new object.
 
-    if (ijt <= now) {
+    if (ijt <= now)
       inject_new_object(view);
-
-      if (view->object_->code(0).asOpcode() == Opcodes::Fact) {
-        Goal *goal = ((_Fact *)view->object_)->get_goal();
-        if (goal && goal->is_drive())
-          // Log the injection of a drive, presumably from a program, possibly delayed by a TimeJob.
-          // The view injection time may be different than now, so log it too.
-          // In general, the problem is how to relate the reduction output event to the injection event
-          // which could be delayed.
-          OUTPUT_LINE(MDL_IN, Utils::RelativeTime(Now()) << " -> drive " <<
-            view->object_->get_oid() << ", ijt " << Utils::RelativeTime(view->get_ijt()));
-      }
-    }
     else {
 
       P<TimeJob> j = new InjectionJob(view, ijt, is_from_io_device);
@@ -1309,7 +1373,7 @@ void _Mem::pack_fact_object(Code *fact_object, Code *hlp, uint16 &write_index, v
   }
 }
 
-Code* _Mem::find_object(vector<Code*> *objects, const char* name) {
+Code* _Mem::find_object(const vector<Code*> *objects, const char* name) {
   // Find the object OID.
   uint32 oid = Seed.object_names_.findSymbol(name);
   if (oid == UNDEFINED_OID)

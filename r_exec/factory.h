@@ -153,17 +153,16 @@ class Success;
 
 class r_exec_dll _Fact :
   public LObject {
-private:
-  static bool MatchAtom(Atom lhs, Atom rhs);
-  static bool MatchStructure(const r_code::Code *lhs, uint16 lhs_base_index, uint16 lhs_index, const r_code::Code *rhs, uint16 rhs_index, bool same_binding_state);
-  static bool Match(const r_code::Code *lhs, uint16 lhs_base_index, uint16 lhs_index, const r_code::Code *rhs, uint16 rhs_index, uint16 lhs_arity, bool same_binding_state);
-  static bool CounterEvidence(const r_code::Code *lhs, const r_code::Code *rhs);
 protected:
   _Fact();
   _Fact(r_code::SysObject *source);
   _Fact(_Fact *f);
   _Fact(uint16 opcode, r_code::Code *object, Timestamp after, Timestamp before, float32 confidence, float32 psln_thr);
 public:
+  static bool MatchAtom(Atom lhs, Atom rhs);
+  static bool MatchStructure(const r_code::Code* lhs, uint16 lhs_base_index, uint16 lhs_index, const r_code::Code* rhs, uint16 rhs_index, bool same_binding_state = false);
+  static bool Match(const r_code::Code* lhs, uint16 lhs_base_index, uint16 lhs_index, const r_code::Code* rhs, uint16 rhs_index, uint16 lhs_arity, bool same_binding_state = false);
+  static bool CounterEvidence(const r_code::Code* lhs, const r_code::Code* rhs);
   /**
    * Check if lhs matches rhs.
    * \param same_binding_state (optional) If false, then allow an unbound variable to match another
@@ -615,7 +614,21 @@ public:
 
   bool is_invalidated() override;
 
+  /**
+   * Check if the components_ contains the given component. This does not recurse.
+   * \param component The component to search for. This checks for the exact object (not a match).
+   * \param component_index If this returns true, set component_index to the index of the found component.
+   * \return True if found the component.
+   */
   bool contains(const _Fact *component, uint16 &component_index) const;
+
+  /**
+   * Check if the components_ or any sub icst contains the give component. (If a component is an f_icst, this
+   * recursively calls itself.)
+   * \param component The component to search for. This checks for the exact object (not a match).
+   * \return True if found the component.
+   */
+  bool r_contains(const _Fact* component) const;
 
   P<BindingMap> bindings_;
   std::vector<P<_Fact> > components_; // the inputs that triggered the building of the icst.
