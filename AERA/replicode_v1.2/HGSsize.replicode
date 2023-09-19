@@ -35,8 +35,8 @@ c2_is_a_hand:(mk.val c2 essence hand 1) |[]
 (|fact c2_is_a_hand 0s:0ms:0us GIGASEC 1 1) [[SYNC_AXIOM now 1 forever stdin nil]]
 
 s1:(ent 1) [[SYNC_ONCE now 1 forever root nil]]
-s1_is_a_sphere:(mk.val s1 essence sphere 1) |[]
-(fact s1_is_a_sphere 0s:0ms:0us GIGASEC 1 1) [[SYNC_AXIOM now 1 forever stdin nil]]
+s1_is_a_cylinder:(mk.val s1 essence cylinder 1) |[]
+(fact s1_is_a_cylinder 0s:0ms:0us GIGASEC 1 1) [[SYNC_AXIOM now 1 forever stdin nil]]
 s1_is_small:(mk.val s1 size small 1) |[]
 (fact s1_is_small 0s:0ms:0us GIGASEC 1 1) [[SYNC_AXIOM now 1 forever stdin nil]]
 s1_is_a_hand:(mk.val s1 essence hand 1) |[]
@@ -566,7 +566,7 @@ pgm_cmd_grab_h_c2_fail:(pgm [] []
 (ipgm pgm_cmd_grab_h_c2_fail [] RUN_ALWAYS MAX_TIME VOLATILE NOTIFY 1) []
    [SYNC_ONCE now 0 forever emulator nil 1]
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; programs for sphere s1 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; programs for cylinder s1 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 pgm_cmd_grab_h_s1:(pgm [] []
    (ptn (fact G:(goal (fact Command:(cmd grab_type1 [h] ::) Cmd_after: Cmd_before: ::) ::) ::) [])
