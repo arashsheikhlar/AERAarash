@@ -639,7 +639,7 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal, BOOLEAN analog
   P<Code> new_cst;
   vector<View*> views_mdl;
   vector<View*> views_cst;
-  bool matchAxiomFailiure = false;
+  bool matchFailiure = false;
 
   for (uint16 i = 1; i <= obj_count; ++i) {
 
@@ -669,59 +669,61 @@ void CSTController::abduce(HLPBindingMap *bm, Fact *f_super_goal, BOOLEAN analog
         break;
       case MATCH_SUCCESS_NEGATIVE:
       case MATCH_FAILURE: // inject a sub-goal for the missing predicted positive evidence.
-        matchAxiomFailiure = true;
+        matchFailiure = true;
         inject_goal(bm, f_super_goal, bound_pattern, sub_sim, now, confidence, host); // all sub-goals share the same sim.
         break;
       }
     }
   }
   // create a CST-REQ
-  if(goalGoal->code(0).asOpcode() == Opcodes::IMdl && matchAxiomFailiure && analogy 
-    && components.size() >= 3) { // limit the number of created CSTs to CSTs with 3 and more components so that the
+  if (!(goalGoal->code(0).asOpcode() == Opcodes::IMdl && matchFailiure && analogy
+    && components.size() >= 3))
+    return;
+   // limit the number of created CSTs to CSTs with 3 and more components so that the
     //number of variables does not change in the CST of behaviors (e.g. grab). 
 
-    _Fact* component = components[0].object;
-    P<HLPBindingMap> bmcst = new HLPBindingMap();
-    new_cst = _TPX::build_cst_sim(components, bmcst, component, (Group*)get_out_group(0));
-    _Fact* f_icst = bmcst->build_f_ihlp(new_cst, Opcodes::ICst, false);
-    // f_icst->set_reference(0, bmcst->bind_pattern(f_icst->get_reference(0)));
-    // _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
-    _Mem::Get()->pack_hlp(new_cst);
-    View* view_cst = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, new_cst, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
-    views_cst.push_back(view_cst);
-    _Mem::Get()->inject_hlps(views_cst, host);
+  P<HLPBindingMap> bmcst = new HLPBindingMap();
+  new_cst = _TPX::build_cst_sim(components, bmcst, components[0].object, (Group*)get_out_group(0));
+  _Fact* f_icst = bmcst->build_f_ihlp(new_cst, Opcodes::ICst, false);
+  // f_icst->set_reference(0, bmcst->bind_pattern(f_icst->get_reference(0)));
+  // _Fact* component_pattern = (_Fact*)new_cst->get_reference(0);
+  _Mem::Get()->pack_hlp(new_cst);
+  View* view_cst = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, new_cst, 1); // SYNC_ONCE,sln=0,res=forever,act=1.
+  views_cst.push_back(view_cst);
+  _Mem::Get()->inject_hlps(views_cst, host);
 
-    // causal model
-    auto crm_controller = (HLPController*)sim->get_f_super_goal()->get_goal()->get_sim()->solution_controller_;
-    BindingMap* crm_binding_map = crm_controller->bindings_;
-    Code* crm = crm_controller->get_object();
+  // causal model
+  auto crm_controller = (HLPController*)sim->get_f_super_goal()->get_goal()->get_sim()->solution_controller_;
+  BindingMap* crm_binding_map = crm_controller->bindings_;
+  Code* crm = crm_controller->get_object();
     
-    // build model head, guards, and model tail for a requirement model
-    auto req_controller = (MDLController*)sim->solution_controller_;
-    auto abstract_f_icst = req_controller->bindings_->abstract_f_ihlp(f_icst);
-    // The timings should have been set correctly when f_icst was created.
-    abstract_f_icst->code(FACT_AFTER) = req_controller->get_rhs()->code(FACT_AFTER);
-    abstract_f_icst->code(FACT_BEFORE) = req_controller->get_rhs()->code(FACT_BEFORE);
-    // For the abstract icst, we want wildcards here.
-    abstract_f_icst->code(FACT_CFD) = Atom::Wildcard();
-    abstract_f_icst->code(FACT_ARITY) = Atom::Wildcard();
-    abstract_f_icst->get_reference(0)->code(I_HLP_WEAK_REQUIREMENT_ENABLED) = Atom::Wildcard();
-    abstract_f_icst->get_reference(0)->code(I_HLP_ARITY) = Atom::Wildcard();
+  // build model head, guards, and model tail for a requirement model
+  auto req_controller = (MDLController*)sim->solution_controller_;
+  auto abstract_f_icst = req_controller->bindings_->abstract_f_ihlp(f_icst);
+  // The timings should have been set correctly when f_icst was created.
+  abstract_f_icst->code(FACT_AFTER) = req_controller->get_rhs()->code(FACT_AFTER);
+  abstract_f_icst->code(FACT_BEFORE) = req_controller->get_rhs()->code(FACT_BEFORE);
+  // For the abstract icst, we want wildcards here.
+  abstract_f_icst->code(FACT_CFD) = Atom::Wildcard();
+  abstract_f_icst->code(FACT_ARITY) = Atom::Wildcard();
+  abstract_f_icst->get_reference(0)->code(I_HLP_WEAK_REQUIREMENT_ENABLED) = Atom::Wildcard();
+  abstract_f_icst->get_reference(0)->code(I_HLP_ARITY) = Atom::Wildcard();
 
-    uint16 write_index;
-    P<Code> req = _TPX::build_mdl_head_from_abstract(0, abstract_f_icst, req_controller->get_rhs(), write_index);
-    P<GuardBuilder> guard_builder = new GuardBuilder();
-    guard_builder->build(req, NULL, NULL, write_index);
-    _TPX::build_mdl_tail_sim(req, write_index, (Group*)get_out_group(0));
+  uint16 write_index;
+  P<Code> req = _TPX::build_mdl_head_from_abstract(0, abstract_f_icst, req_controller->get_rhs(), write_index);
+  P<GuardBuilder> guard_builder = new GuardBuilder();
+  guard_builder->build(req, NULL, NULL, write_index);
+  _TPX::build_mdl_tail_sim(req, write_index, (Group*)get_out_group(0));  
+  req->code(MDL_SR) = Atom::Float(.6); // consdier confidence below .6
+ 
+  
+  // pack requirement model
+  _Mem::Get()->pack_hlp(req);
 
-    // pack requirement model
-    _Mem::Get()->pack_hlp(req);
-
-    // create the view of the requirement model and inject it 
-    View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
-    views_mdl.push_back(view_req);
-    _Mem::Get()->inject_hlps(views_mdl, host);
-  }
+  // create the view of the requirement model and inject it 
+  View* view_req = new View(View::SYNC_ONCE, now, 0, -1, host, NULL, req, 1);
+  views_mdl.push_back(view_req);
+  _Mem::Get()->inject_hlps(views_mdl, host);
 }
 
 void CSTController::abduce(HLPBindingMap* bm, Fact* f_super_goal) {
