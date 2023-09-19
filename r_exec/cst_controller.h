@@ -88,7 +88,7 @@
 #include "hlp_overlay.h"
 #include "hlp_controller.h"
 #include "factory.h"
-
+#include "pattern_extractor.h"
 
 namespace r_exec {
 
@@ -198,6 +198,7 @@ private:
    */
   void abduce_simulated(HLPBindingMap *bm, Fact *f_super_goal);
   void abduce(HLPBindingMap *bm, Fact *f_super_goal); // f_super_goal is f0->g->f1->icst or f0->g->|f1->icst.
+  void abduce(HLPBindingMap* bm, Fact* f_super_goal, BOOLEAN analogy); // f_super_goal is f0->g->f1->icst or f0->g->|f1->icst.
   void inject_goal(HLPBindingMap *bm,
     Fact *f_super_goal, // f0->g->f1->icst or f0->g->|f1->icst.
     _Fact *sub_goal_target, // f1.

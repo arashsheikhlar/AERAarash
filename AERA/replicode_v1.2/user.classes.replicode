@@ -24,6 +24,8 @@
 !dfn (move_hand :); arg0: a hand, arg1: target position
 ; Some programs use grab, release and move instead of grab_hand, etc.
 !dfn (grab :); arg0: an object.
+!dfn (grab_type1 :)
+!dfn (grab_type2 :)
 !dfn (release :); arg0: an object.
 !dfn (move :); arg0: an object, arg1: target position
 !dfn (set_velocity_y :); arg0: an object, arg1: velocity.
